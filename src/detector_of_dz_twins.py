@@ -91,7 +91,7 @@ def CBS(data, n_clusters=5, min_support=10, gamma=1e2, debug=None):
             maf1 = xx[0]*2
             maf2 = xx[0]*2
 
-    else:  # MZ or single
+    else:  # MZ or single #
         maf2 = 0
         maf1 = xx[0]*2
     if maf2 > 0:
