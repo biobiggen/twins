@@ -63,7 +63,6 @@ def init_database(dst, max_dep=2500):
 
 
 def CBS(data, n_clusters=5, min_support=10, gamma=1e2, debug=None):
-    # 自上而下
     if debug:
         print(f'#min_support={min_support}')
     data = np.array(data).reshape(-1, 1)
@@ -96,12 +95,11 @@ def CBS(data, n_clusters=5, min_support=10, gamma=1e2, debug=None):
 
     if len(mres) > 3:
         raise Exception(xx)
-        # 聚类错误
     elif len(mres) == 3:
         maf1 = mres[2]
         maf2 = mres[1]
         maf3 = mres[0]
-    elif len(mres) == 2:  # ff 接近  # 假设不存在 完美避开
+    elif len(mres) == 2:   
         maf1 = mres[1]
         maf2 = mres[1]
         maf3 = mres[0]
