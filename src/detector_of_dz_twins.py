@@ -148,4 +148,4 @@ if __name__ == '__main__':
     plt.ylabel('Relative abudanse of fetal SNPs')
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
-    # plt.savefig('twins_svc_demo.png')
+    plt.savefig('twins_svc_demo.png')
