@@ -23,6 +23,7 @@ coef:[[ -2.74810393 -35.98386663]
 
 '''
 
+
 def init_database(dst, max_dep=2500):
     data = {}
     f_lst = glob.glob(os.path.join(dst, '*'))
@@ -37,8 +38,8 @@ def init_database(dst, max_dep=2500):
         tmp_af = []
         tmp_af.extend(list(bbba.AF))
         tmp_af.extend(list(1-aaab.AF))
-        tmp_af = np.array(tmp_af).reshape(-1,1)
-        res_ff = CBS(tmp_af,min_support=tmp_af.shape[0]/15)
+        tmp_af = np.array(tmp_af).reshape(-1, 1)
+        res_ff = CBS(tmp_af, min_support=tmp_af.shape[0]/20)
         af_cluster[ll] = res_ff
         tmp_ff = bbba.AF.median()+1-aaab.AF.median()
         raw_std = np.average([bbba.AF.std(), aaab.AF.std()],
@@ -55,8 +56,10 @@ def init_database(dst, max_dep=2500):
             data[ll] = [ll, x, cor_std, 2]
     res = pd.DataFrame(data.values(), columns=['CLI', 'X', 'Y', 'Type'])
     for k in af_cluster:
+        if k.startswith('S'):
+            continue
         print(f'{k}\n{af_cluster[k]}]')
-    return res,af_cluster
+    return res, af_cluster
 
 
 def CBS(data, n_clusters=5, min_support=10, gamma=1e2, debug=None):
@@ -64,42 +67,53 @@ def CBS(data, n_clusters=5, min_support=10, gamma=1e2, debug=None):
     if debug:
         print(f'#min_support={min_support}')
     data = np.array(data).reshape(-1, 1)
-    bgm = BayesianGaussianMixture(n_components=n_clusters, 
+    bgm = BayesianGaussianMixture(n_components=n_clusters,
                                   init_params='random', max_iter=1500,
                                   random_state=42,
                                   weight_concentration_prior=gamma).fit(data)
     predict = bgm.predict(data)
     res = []
+    weight = {}
     for x in np.unique(predict):
-        if np.sum(predict==x) > min_support:
+        if np.sum(predict == x) > min_support:
             res.append(np.median(data[predict == x]))
-            xx = np.sort(res)
+            weight[res[-1]] = np.sum(predict == x)
+            xx = np.sort(res)[::-1]
     if debug:
         print(f'# res:{xx}')
-    if len(xx) > 3:
+    mres = [xx[0]]
+    wmres = [weight[xx[0]]]
+    for x in xx:
+        if x == mres[-1]:
+            continue
+        if mres[-1] - x < 0.004:
+            mres[-1] = np.average([mres[-1], x],
+                                  weights=[wmres[-1], weight[x]])
+            wmres[-1] += weight[x]
+        else:
+            mres.append(x)
+            wmres.append(weight[x])
+
+    if len(mres) > 3:
         raise Exception(xx)
         # 聚类错误
-    elif len(xx) == 3:
-        maf2 = xx[1]*2
-        maf1 = xx[0]*2
-        maf3 = xx[2]
-    elif len(xx) == 2:  # ff 接近  # 假设不存在 完美避开
-        if xx[1]-xx[0]<0.005:
-            maf1 = xx[0]*2
-            maf2 = 0
-        else:
-            maf1 = xx[0]*2
-            maf2 = xx[0]*2
-
+    elif len(mres) == 3:
+        maf1 = mres[2]
+        maf2 = mres[1]
+        maf3 = mres[0]
+    elif len(mres) == 2:  # ff 接近  # 假设不存在 完美避开
+        maf1 = mres[1]
+        maf2 = mres[1]
+        maf3 = mres[0]
     else:  # MZ or single #
-        maf2 = 0
-        maf1 = xx[0]*2
-    if maf2 > 0:
-        ff1 = maf1/(1-maf2)
-        ff2 = maf2/(1-maf1)
-    else:
-        ff1 = maf1
-        ff2 = maf2
+        maf1 = 0
+        maf2 = mres[0]
+        maf3 = mres[0]
+        #FF_1=(2*bafm_1*bafm_3)/(2*bafm_1*bafm_3+(bafm_1+bafm_2 )*(1-2*bafm_3 ) )                    (18)
+        #FF_2=(2*bafm_2*bafm_3)/(2*bafm_2*bafm_3+(bafm_1+bafm_2 )*(1-2*bafm_2 ) )                    (19)
+
+    ff1 = 2*maf1*maf3/(2*maf1*maf3+(maf1+maf2)*(1-2*maf3))
+    ff2 = 2*maf2*maf3/(2*maf2*maf3+(maf1+maf2)*(1-2*maf2))
     ret = [ff1, ff2]
     ret = [float('%0.3f' % xx) for xx in ret]
     return(ret)
@@ -109,9 +123,9 @@ if __name__ == '__main__':
     dst = os.path.join(os.path.dirname(
         os.path.dirname(__file__)), 'demo_data')
     print(dst)
-    df,_ = init_database(dst=dst)
-    df_X = np.array(df.loc[:,['X', 'Y']])
-    df_Y = np.array(df.loc[:,'Type'])
+    df, _ = init_database(dst=dst)
+    df_X = np.array(df.loc[:, ['X', 'Y']])
+    df_Y = np.array(df.loc[:, 'Type'])
     X_train, X_test, y_train, y_test = train_test_split(df_X, df_Y)
     clf = SVC(kernel='rbf', C=1000, probability=True)
     clf.fit(X_train, y_train)
@@ -136,4 +150,4 @@ if __name__ == '__main__':
     plt.ylabel('Relative abudanse of fetal SNPs')
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
-    #plt.savefig('twins_svc_demo.png')
+    # plt.savefig('twins_svc_demo.png')
