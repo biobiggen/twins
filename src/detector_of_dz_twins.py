@@ -22,6 +22,14 @@ coef:[[ -2.74810393 -35.98386663]
  [  0.74538823   9.87496716]]
 
 '''
+def remove_outliers(data):
+    q1, q3 = np.percentile(data, [25, 75])
+    iqr = q3 - q1
+    lower_bound = q1 - (1.5 * iqr)
+    upper_bound = q3 + (1.5 * iqr)
+    #print(np.sum(data<lower_bound))
+    #print(np.sum(data>upper_bound))
+    return data[(data > lower_bound) & (data < upper_bound)]
 
 
 def init_database(dst, max_dep=2500):
@@ -33,13 +41,13 @@ def init_database(dst, max_dep=2500):
         ll = os.path.basename(line)
         df = pd.read_csv(line)
         dep = min(np.median(df.REF_DEPTH+df.ALT_DEPTH), max_dep) + 1
+        af = df.AF.apply(lambda x: x if x <=0.5 else 1-x)
         bbba = df.loc[df.AF.between(0.01, 0.2), :]
         aaab = df.loc[df.AF.between(0.8, 0.99), :]
-        tmp_af = []
-        tmp_af.extend(list(bbba.AF))
-        tmp_af.extend(list(1-aaab.AF))
+        tmp_af = af[af.between(0.01,0.2)]
+        tmp_af = list(remove_outliers(tmp_af))
         tmp_af = np.array(tmp_af).reshape(-1, 1)
-        res_ff = CBS(tmp_af, min_support=tmp_af.shape[0]/20)
+        res_ff = CBS(tmp_af, min_support=tmp_af.shape[0]/30)
         af_cluster[ll] = res_ff
         tmp_ff = bbba.AF.median()+1-aaab.AF.median()
         raw_std = np.average([bbba.AF.std(), aaab.AF.std()],
@@ -67,7 +75,7 @@ def CBS(data, n_clusters=5, min_support=10, gamma=1e2, debug=None):
         print(f'#min_support={min_support}')
     data = np.array(data).reshape(-1, 1)
     bgm = BayesianGaussianMixture(n_components=n_clusters,
-                                  init_params='random', max_iter=1500,
+                                  init_params='random_from_data', max_iter=1500,
                                   random_state=42,
                                   weight_concentration_prior=gamma).fit(data)
     predict = bgm.predict(data)
